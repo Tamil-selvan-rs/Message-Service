@@ -4,7 +4,6 @@ import com.ESOP.MessageService.Dto.AppResponseDto;
 import com.ESOP.MessageService.Dto.MessageDto;
 import com.ESOP.MessageService.Entity.Template;
 import com.ESOP.MessageService.Repository.MessageRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import tools.jackson.core.type.TypeReference;
@@ -21,37 +20,42 @@ import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 public class MessageServiceImpl implements MessageService {
-    @Autowired
-    private ObjectMapper objectMapper;
-    @Autowired
-    private MapperBuilder mapperBuilder;
-    @Autowired
-    private MessageRepository messageRepository;
-    @Autowired
-    private JdbcTemplate jdbcTemplate;
+    private final ObjectMapper objectMapper;
+    private final MessageRepository messageRepository;
+    private final JdbcTemplate jdbcTemplate;
+
+
+    public MessageServiceImpl(ObjectMapper objectMapper,
+                              MapperBuilder<?, ?> mapperBuilder,
+                              MessageRepository messageRepository,
+                              JdbcTemplate jdbcTemplate) {
+        this.objectMapper = objectMapper;
+        this.messageRepository = messageRepository;
+        this.jdbcTemplate = jdbcTemplate;
+        mapperBuilder.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    }
 
 
     @Override
     public AppResponseDto processSendSms(MessageDto messageDto) {
-      try {
-          mapperBuilder.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-          Template data = messageRepository.findById(messageDto.getTemplateId()).orElseThrow();
-          Map<String, Object> template = getMapFromJson(data.getPlaceHolder());
+        try {
+            Template data = messageRepository.findById(messageDto.getTemplateId()).orElseThrow();
+            Map<String, Object> template = getMapFromJson(data.getPlaceHolder());
 
-          List<String> nameList = getNameList(data.getEntityName(), template.get("name").toString());
+            List<String> nameList = getNameList(data.getEntityName(), String.valueOf(template.get("name")));
 
-          List<Map<String, Object>> messageList = nameList.stream().map(message -> {
-              Map<String, Object> map = new HashMap<>();
-              map.put("subject", data.getSubject().replace("[name]", message));
-              map.put("Body", data.getBody());
-              return map;
-          }).toList();
+            List<Map<String, Object>> messageList = nameList.stream().map(message -> {
+                Map<String, Object> map = new HashMap<>();
+                map.put("subject", data.getSubject().replace("[name]", message));
+                map.put("Body", data.getBody());
+                return map;
+            }).toList();
 
-          return new AppResponseDto("200","SUCCESS",null,messageList);
+            return new AppResponseDto("200", "SUCCESS", null, messageList);
 
-      }catch (Exception e){
-          return new  AppResponseDto("500","ERROR",e.getMessage(),null);
-      }
+        } catch (Exception e) {
+            return new AppResponseDto("500", "ERROR", e.getMessage(), null);
+        }
     }
 
     @Override
@@ -70,8 +74,13 @@ public class MessageServiceImpl implements MessageService {
                         template.setBody(String.valueOf(data.getOrDefault("body", "")));
                         template.setEntityName(String.valueOf(data.getOrDefault("entityName", "")));
 
-                        // Cast and convert the placeholder map
-                        Map<String, Object> placeholders = (Map<String, Object>) data.get("placeHolder");
+                        // Cast and convert the placeholder Map
+                        //Map<String, Object> placeholders = (Map<String, Object>) data.get("placeHolder");
+                        Map<String, Object> placeholders = objectMapper.convertValue(
+                                data.get("placeHolder"),
+                                new TypeReference<>() {
+                                }
+                        );
                         template.setPlaceHolder(generateMapToJson(placeholders));
 
                         return template;
@@ -85,9 +94,8 @@ public class MessageServiceImpl implements MessageService {
 
     private Map<String, Object> getMapFromJson(String jsonString) {
         //convert json to java object
-        Map<String, Object> stringObjectMap = objectMapper.readValue(jsonString, new TypeReference<Map<String, Object>>() {
+        return objectMapper.readValue(jsonString, new TypeReference<>() {
         });
-        return stringObjectMap;
     }
 
     private String generateMapToJson(Map<String, Object> stringList) {
@@ -96,10 +104,9 @@ public class MessageServiceImpl implements MessageService {
         objectMapper.writeValue(stringWriter, stringList);
         return stringWriter.toString();
     }
-
     private List<String> getNameList(String entityName, String coloumnName) {
-        String sql = "select cname from tableName";
-        sql = sql.replace("tableName", entityName).replace("cname", coloumnName);
+        String sql = "select coloumnName from tableName";
+        sql = sql.replace("tableName", entityName).replace("coloumnName", coloumnName);
         return jdbcTemplate.queryForList(sql, String.class);
     }
 
@@ -118,7 +125,7 @@ public class MessageServiceImpl implements MessageService {
 ////        String jsonFormate=generateMapToJson(template);
 ////        System.out.println(jsonFormate);
 //        System.out.println(template);
-//
+//       code standarad , readable , reusable, unneccassay funcion not need
 //        return null;
 //    }
 
